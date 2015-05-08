@@ -1,3 +1,4 @@
+import dropbox
 import httplib2
 import pprint
 import time
@@ -68,8 +69,8 @@ class gdrivefile(file):
 		accept.send_keys(Keys.RETURN)
     	#accept.click()
 		a=driver.find_element_by_id("code")
-
-		code=a.get_attribute('value')
+                
+		code=a.get_attribute('value')		
 		driver.quit()
 		#code = raw_input('Enter verification code: ').strip()#change here
 		credentials = flow.step2_exchange(code)
@@ -90,17 +91,38 @@ class odrivefile(file):
 		pass
 		#code for authorization	
 
-class drobboxfile(file):
+class dropboxfile(file):
 	def upload(self):
+		access_token=None
+		if dropboxfile.authorized==False :
+			dropboxfile.authorize()
+			dropboxfile.authorized=True
 		#code for upload
-		pass
+		client = dropbox.client.DropboxClient(dropbox.access_token)
+		f = open('test.txt', 'rb')
+		response = client.put_file('/magnum-opus.txt', f)
 
 	@staticmethod
 	def authorize():
-		pass
+		app_key = '0iwzfwq43mcvirb'
+		app_secret = 'ivcutlb76xs5cbr'
+	
+		flow = dropbox.client.DropboxOAuth2FlowNoRedirect(app_key, app_secret)
+		authorize_url = flow.start()
+		driver=webdriver.Firefox()#depends on your browser
+		driver.get(authorize_url)
+		#login=driver.find_element_by_name("signIn")
+		#login.send_keys(Keys.RETURN)
+		accept= WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.NAME, "allow_access")))
+		accept.send_keys(Keys.RETURN)
+    	#accept.click()
+		code=driver.find_element_by_id("auth-code").get_attribute("innerHTML")
+                
+		print code		
+		driver.quit()
+		dropbox.access_token, dropbox.user_id = flow.finish(code)
 		#code for authorization	
 add=raw_input("enter address of a file")
-f1=gdrivefile(add)
+f1=dropboxfile(add)
 f1.upload()
 #f1.upload()
-
