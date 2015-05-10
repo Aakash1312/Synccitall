@@ -2,10 +2,16 @@ import dropbox
 import httplib2
 import pprint
 import time
+import os
+import shutil
+import ntpath
+#import urllib2
 #libraries for gdrive file upload
 from apiclient.discovery import build
 from apiclient.http import MediaFileUpload
 from oauth2client.client import OAuth2WebServerFlow
+from apiclient import errors
+from apiclient import http
 #libraries for web browsing
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -19,6 +25,8 @@ from selenium.webdriver.common.keys import Keys
 
 class file:#bas class file
 	authorized=False#whether authorization has taken place or not
+	listupdated=False#whether file list is updated or not
+	downloadfilepath=None
 	def __init__(self,location):
 		self.address=location#address of file on pc
 		
@@ -30,6 +38,8 @@ class file:#bas class file
 
 class gdrivefile(file):
 	drive_service=None
+	filelist=[]
+
 	def upload(self):
 		if gdrivefile.authorized==False :
 			gdrivefile.authorize()
@@ -38,12 +48,16 @@ class gdrivefile(file):
 		FILENAME = self.address
 		media_body = MediaFileUpload(FILENAME, mimetype='', resumable=True)
 		body = {
-		  'title': FILENAME,
+		  'title': ntpath.basename(FILENAME),
 		  'description': '',
 		  'mimeType': ''
 		}
-
-		file = gdrivefile.drive_service.files().insert(body=body, media_body=media_body).execute()
+		try:
+			file = gdrivefile.drive_service.files().insert(body=body, media_body=media_body).execute()
+			#iINSERT CODE TO UPDATE FILE LIST
+		except errors.HttpError,error :
+			print("error in uploading file")
+	
 		#pprint.pprint(file)
 
 	@staticmethod
@@ -80,6 +94,92 @@ class gdrivefile(file):
 		http = credentials.authorize(http)
 
 		gdrivefile.drive_service = build('drive', 'v2', http=http)
+	@staticmethod
+	def updatefilelist():#information about files on your drive
+		if gdrivefile.authorized==False :
+			gdrivefile.authorize()
+			gdrivefile.authorized=True
+		page_token = None
+		while True:
+			try:
+				param={}
+				if page_token:
+					param['pageToken']=page_token
+				dfiles=gdrivefile.drive_service.files().list(**param).execute()
+				gdrivefile.filelist.extend(dfiles['items'])
+				page_token=dfiles.get('nextPageToken')
+				gdrivefile.listupdated=True
+				if not page_token:
+					break
+			except errors.HttpError:
+				print("error in udating list")
+				break
+	@staticmethod
+	def getfile():
+		if gdrivefile.listupdated==False:
+			gdrivefile.updatefilelist()
+		ref=[]	
+		sample=raw_input('enter the file name ').strip()
+		for gfile in gdrivefile.filelist:
+			if sample in gfile['title']:
+				if sample==gfile['title']:
+					return gfile
+				ref.append(gfile['title'])
+		print("No match found.Following are the related files")
+		for name in ref:
+			print(name)	
+		return None				
+
+
+
+	@staticmethod					
+	def download(add):
+		file2download=gdrivefile.getfile()
+		if file2download==None:
+			return
+		else:
+			downloadedfile=open(file2download.get('title'),"wb")
+
+			download_url=file2download.get('downloadUrl')
+			if download_url:
+				resp ,content=gdrivefile.drive_service._http.request(download_url)
+				if resp.status==200:
+					#print('Status',resp)
+					downloadedfile.write(content)
+					if add=='n':
+						src="/home/aakash/Downloads/" +  file2download.get('title')
+					else:
+						src=add +  file2download.get('title')
+					dest=os.getcwd()+"/"+ file2download.get('title')
+					#shutil.move(dest,src)	
+
+					downloadedfile.close()
+					os.rename(dest,src)
+					
+				else :
+					print("An error occured in downloading")
+			else:
+				print("No such file exists ")
+				 			
+				
+
+  			
+
+
+			 
+
+
+				
+
+		
+
+					
+
+
+
+		
+			  
+
 
 class odrivefile(file):
 	def upload(self):
@@ -92,6 +192,7 @@ class odrivefile(file):
 		#code for authorization	
 
 class dropboxfile(file):
+	
 	def upload(self):
 		access_token=None
 		if dropboxfile.authorized==False :
@@ -99,8 +200,8 @@ class dropboxfile(file):
 			dropboxfile.authorized=True
 		#code for upload
 		client = dropbox.client.DropboxClient(dropbox.access_token)
-		f = open('test.txt', 'rb')
-		response = client.put_file('/magnum-opus.txt', f)
+		f = open(self.address, 'rb')
+		response = client.put_file(ntpath.basename(self.address), f)
 
 	@staticmethod
 	def authorize():
@@ -118,11 +219,17 @@ class dropboxfile(file):
     	#accept.click()
 		code=driver.find_element_by_id("auth-code").get_attribute("innerHTML")
                 
-		print code		
+				
 		driver.quit()
 		dropbox.access_token, dropbox.user_id = flow.finish(code)
 		#code for authorization	
 add=raw_input("enter address of a file")
 f1=dropboxfile(add)
 f1.upload()
-#f1.upload()
+'''
+print "Please specify download directory. Enter 'n' if you wand default directory"
+add=raw_input("Enter response")
+
+	
+gdrivefile.download(add)
+'''
