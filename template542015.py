@@ -22,11 +22,20 @@ from selenium.webdriver.common.keys import Keys
 #libraries for onedrive file upload
 
 #libraries for dropbox file upload
+import Tkinter
+import tkFileDialog
+ 
+def main():
+ 
+    Tkinter.Tk().withdraw() # Close the root window
+    in_path = tkFileDialog.askdirectory()
+    return in_path
 
 class file:#bas class file
 	authorized=False#whether authorization has taken place or not
 	listupdated=False#whether file list is updated or not
 	downloadfilepath=None
+	found=1
 	def __init__(self,location):
 		self.address=location#address of file on pc
 		
@@ -75,17 +84,26 @@ class gdrivefile(file):
                            redirect_uri=REDIRECT_URI)
 		authorize_url = flow.step1_get_authorize_url()
 		#print 'Go to the following link in your browser: ' + authorize_url
-		driver=webdriver.Firefox()#depends on your browser
-		driver.get(authorize_url)
-		#login=driver.find_element_by_name("signIn")
-		#login.send_keys(Keys.RETURN)
-		accept= WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.ID, "submit_approve_access")))
-		accept.send_keys(Keys.RETURN)
-    	#accept.click()
-		a=driver.find_element_by_id("code")
+		try:		
+			driver=webdriver.Firefox()#depends on your browser
+						
+			driver.get(authorize_url)
+			cookies=driver.get_cookies()
+			for cookie in cookies:
+				driver.add_cookie(cookie)			
+			#login=driver.find_element_by_name("signIn")
+			#login.send_keys(Keys.RETURN)
+			accept= WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.ID, "submit_approve_access")))
+			accept.send_keys(Keys.RETURN)
+    			#accept.click()
+			a=driver.find_element_by_id("code")
                 
-		code=a.get_attribute('value')		
-		driver.quit()
+			code=a.get_attribute('value')		
+			driver.quit()
+			gdrivefile.authorized=True
+		except:
+			print "Could not authorize to Google Drive"
+			return None
 		#code = raw_input('Enter verification code: ').strip()#change here
 		credentials = flow.step2_exchange(code)
 
@@ -97,8 +115,7 @@ class gdrivefile(file):
 	@staticmethod
 	def updatefilelist():#information about files on your drive
 		if gdrivefile.authorized==False :
-			gdrivefile.authorize()
-			gdrivefile.authorized=True
+			return None
 		page_token = None
 		while True:
 			try:
@@ -115,16 +132,19 @@ class gdrivefile(file):
 				print("error in udating list")
 				break
 	@staticmethod
-	def getfile():
+	def getfile(add,add2):
 		if gdrivefile.listupdated==False:
 			gdrivefile.updatefilelist()
 		ref=[]	
-		sample=raw_input('enter the file name ').strip()
+		sample=add
 		for gfile in gdrivefile.filelist:
 			if sample in gfile['title']:
 				if sample==gfile['title']:
 					return gfile
 				ref.append(gfile['title'])
+		dropboxfile.download(add,add2)
+		if file.found==1:
+			return None		
 		print("No match found.Following are the related files")
 		for name in ref:
 			print(name)	
@@ -133,8 +153,8 @@ class gdrivefile(file):
 
 
 	@staticmethod					
-	def download(add):
-		file2download=gdrivefile.getfile()
+	def download(add2,add):
+		file2download=gdrivefile.getfile(add,add2)
 		if file2download==None:
 			return
 		else:
@@ -146,41 +166,20 @@ class gdrivefile(file):
 				if resp.status==200:
 					#print('Status',resp)
 					downloadedfile.write(content)
-					if add=='n':
-						src="/home/aakash/Downloads/" +  file2download.get('title')
-					else:
-						src=add +  file2download.get('title')
+					
+					src=add2+"/"+ file2download.get('title')
 					dest=os.getcwd()+"/"+ file2download.get('title')
 					#shutil.move(dest,src)	
 
 					downloadedfile.close()
-					os.rename(dest,src)
+					#os.rename(dest,src)
+					shutil.move(dest,src)
 					
 				else :
 					print("An error occured in downloading")
 			else:
 				print("No such file exists ")
 				 			
-				
-
-  			
-
-
-			 
-
-
-				
-
-		
-
-					
-
-
-
-		
-			  
-
-
 class odrivefile(file):
 	def upload(self):
 		#code for upload
@@ -192,16 +191,16 @@ class odrivefile(file):
 		#code for authorization	
 
 class dropboxfile(file):
-	
+	client=None
 	def upload(self):
-		access_token=None
+		
 		if dropboxfile.authorized==False :
 			dropboxfile.authorize()
 			dropboxfile.authorized=True
 		#code for upload
-		client = dropbox.client.DropboxClient(dropbox.access_token)
+		
 		f = open(self.address, 'rb')
-		response = client.put_file(ntpath.basename(self.address), f)
+		response = dropboxfile.client.put_file(ntpath.basename(self.address), f)
 
 	@staticmethod
 	def authorize():
@@ -210,26 +209,48 @@ class dropboxfile(file):
 	
 		flow = dropbox.client.DropboxOAuth2FlowNoRedirect(app_key, app_secret)
 		authorize_url = flow.start()
-		driver=webdriver.Firefox()#depends on your browser
-		driver.get(authorize_url)
-		#login=driver.find_element_by_name("signIn")
-		#login.send_keys(Keys.RETURN)
-		accept= WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.NAME, "allow_access")))
-		accept.send_keys(Keys.RETURN)
-    	#accept.click()
-		code=driver.find_element_by_id("auth-code").get_attribute("innerHTML")
+		try:
+			driver=webdriver.Firefox()#depends on your browser
+			
+			driver.get(authorize_url)
+			#login=driver.find_element_by_name("signIn")
+			#login.send_keys(Keys.RETURN)
+			accept= WebDriverWait(driver, 60).until(EC.element_to_be_clickable((By.NAME, "allow_access")))
+			accept.send_keys(Keys.RETURN)
+    			#accept.click()
+			code=driver.find_element_by_id("auth-code").get_attribute("innerHTML")
                 
 				
-		driver.quit()
+			driver.quit()
+			dropboxfile.authorized=True
+		except:
+			print "Could not authorize to dropbox"
+			return None
 		dropbox.access_token, dropbox.user_id = flow.finish(code)
+		dropboxfile.client = dropbox.client.DropboxClient(dropbox.access_token)
 		#code for authorization	
-add=raw_input("enter address of a file")
+	@staticmethod
+	def download(add,add2):
+		if dropboxfile.authorized==False :
+			return None
+		try:		
+			f, metadata = dropboxfile.client.get_file_and_metadata("/"+add)
+		except TypeError:
+			file.found=0
+		out = open(add2+"/"+add, 'wb')
+		out.write(f.read())
+		out.close()
+
+gdrivefile.authorize()
+dropboxfile.authorize()
+'''
 f1=dropboxfile(add)
 f1.upload()
 '''
-print "Please specify download directory. Enter 'n' if you wand default directory"
-add=raw_input("Enter response")
 
-	
-gdrivefile.download(add)
-'''
+if gdrivefile.authorized or dropboxfile.authorized:
+	add=raw_input("Enter file to download")
+	#print "Please specify download directory. Enter 'n' if you wand default directory"
+	#add2=raw_input("Enter response")
+	add2=main()
+	gdrivefile.download(add2,add)
